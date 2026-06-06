@@ -7,6 +7,19 @@ by comparing generated answers against the actual retrieved context chunks.
 """
 
 import sys
+from types import ModuleType
+
+# Create a dummy module for langchain_community.chat_models.vertexai
+# to prevent ragas import from crashing if vertexai dependencies are not installed,
+# and to avoid having a local directory shadow the real langchain_community package.
+if "langchain_community.chat_models.vertexai" not in sys.modules:
+    vertexai_stub = ModuleType("vertexai")
+    class ChatVertexAI:
+        """Dummy stub so ragas import does not crash."""
+        pass
+    vertexai_stub.ChatVertexAI = ChatVertexAI
+    sys.modules["langchain_community.chat_models.vertexai"] = vertexai_stub
+
 import json
 import os
 import pathlib
