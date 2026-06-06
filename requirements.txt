@@ -1,0 +1,11 @@
+langchain>=0.1.0
+langchain-community
+langchain-text-splitters
+langchain-google-genai>=1.0.0
+chromadb
+sentence-transformers
+rank-bm25
+pypdf
+ragas>=0.1.0
+datasets
+python-dotenv

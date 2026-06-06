@@ -1,0 +1,34 @@
+name: RAG Eval Gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install langchain langchain-google-genai langchain-community
+          pip install chromadb sentence-transformers rank_bm25
+          pip install ragas datasets
+
+      - name: Run evaluations
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: python eval/run_evals.py
+
+      - name: Check regression
+        run: python eval/check_regression.py

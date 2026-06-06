@@ -1,0 +1,82 @@
+[
+  {
+    "question": "Why do the authors propose Retrieval-Augmented Generation (RAG) instead of relying only on large pre-trained language models?",
+    "ground_truth": "Large pre-trained language models store knowledge in their parameters but have limited ability to precisely access, update, or provide provenance for that knowledge, and they often hallucinate facts; RAG addresses this by combining a parametric generator with an explicit, editable non-parametric memory accessed via retrieval, making knowledge easier to inspect, update, and ground."
+  },
+  {
+    "question": "What is a Retrieval-Augmented Generation (RAG) model at a high level?",
+    "ground_truth": "A RAG model is a sequence-to-sequence generative model that uses an input query to retrieve relevant text passages from a large non-parametric memory, such as a dense index of Wikipedia, and then conditions its generation on both the input and these retrieved passages, marginalizing over them as latent variables."
+  },
+  {
+    "question": "In the RAG architecture, what plays the role of parametric memory and what plays the role of non-parametric memory?",
+    "ground_truth": "The parametric memory is the pre-trained seq2seq generator, specifically BART-large, whose parameters implicitly encode knowledge, while the non-parametric memory is a dense vector index of Wikipedia passages built from DPR document embeddings, which can be explicitly retrieved and updated without retraining the generator."
+  },
+  {
+    "question": "What are the two main probabilistic components of RAG and what do they model?",
+    "ground_truth": "RAG consists of a retriever pη(z∣x), which models a distribution over retrieved documents z given the input query x, and a generator pθ(yi∣x,z,y1:i−1), which models the distribution over output tokens conditioned on the input, a retrieved document, and previous output tokens."
+  },
+  {
+    "question": "How does the RAG-Sequence model define the probability of an output sequence given an input?",
+    "ground_truth": "RAG-Sequence assumes a single latent document explains the entire output, approximating p(y∣x) by summing over the top-K retrieved documents z, where each term is the product of the document prior pη(z∣x) and the seq2seq likelihood pθ(y∣x,z), which itself factorizes over tokens."
+  },
+  {
+    "question": "How does RAG-Token differ from RAG-Sequence in how it marginalizes over retrieved documents?",
+    "ground_truth": "RAG-Token allows a different latent document for each output token, so the sequence probability is a product over positions of a sum over documents, where at every step the model marginalizes token probabilities across the top-K documents weighted by their retrieval scores."
+  },
+  {
+    "question": "How is the retriever pη(z∣x) implemented in RAG and how are top-K documents found efficiently?",
+    "ground_truth": "The retriever is Dense Passage Retrieval, a bi-encoder that embeds queries and documents using BERT-based encoders and scores them via inner product; top-K documents are obtained by Maximum Inner Product Search over a FAISS index using approximate nearest-neighbor search."
+  },
+  {
+    "question": "How is the generator implemented and how are input and retrieved content combined?",
+    "ground_truth": "The generator uses BART-large, a pre-trained seq2seq Transformer; to integrate retrieval, the model concatenates the input query x with a retrieved passage z and feeds this combined sequence into BART to produce the conditional token distribution."
+  },
+  {
+    "question": "What training objective is used for RAG and which parameters are updated?",
+    "ground_truth": "RAG is trained by minimizing the negative marginal log-likelihood of target outputs over latent documents using stochastic gradient descent with Adam, while fine-tuning the query encoder and BART generator; the document encoder and the index remain fixed to avoid expensive index updates."
+  },
+  {
+    "question": "How does the decoding procedure differ between RAG-Token and RAG-Sequence at test time?",
+    "ground_truth": "For RAG-Token, the model uses a modified autoregressive transition that already marginalizes over documents at each step and can be decoded with standard beam search, whereas RAG-Sequence must run beam search separately for each retrieved document and then re-score or approximate the marginal over document-conditioned hypotheses."
+  },
+  {
+    "question": "On which open-domain QA datasets is RAG evaluated, and what are the main baseline categories?",
+    "ground_truth": "RAG is evaluated on Natural Questions, TriviaQA, WebQuestions, and CuratedTREC, and compared to closed-book parametric models like T5, open-book retrieval-based models such as REALM and DPR, and seq2seq models without retrieval."
+  },
+  {
+    "question": "How do RAG models perform on open-domain QA compared to previous state of the art?",
+    "ground_truth": "Both RAG-Token and RAG-Sequence achieve state-of-the-art or better results on the evaluated open-domain QA benchmarks, such as higher Exact Match scores on Natural Questions, TriviaQA, WebQuestions, and CuratedTREC, outperforming purely parametric seq2seq models and specialized retrieve-and-extract systems like DPR."
+  },
+  {
+    "question": "Why can RAG's generative approach outperform extractive QA systems even on extractive benchmarks?",
+    "ground_truth": "Generative RAG can combine clues from multiple passages that may not contain the exact answer span and can still generate the correct answer, and it can sometimes answer correctly even when no retrieved passage contains the answer verbatim, situations where purely extractive models must fail."
+  },
+  {
+    "question": "How is MSMARCO used in the paper and what is observed about RAG's performance?",
+    "ground_truth": "MSMARCO is treated as an open-domain abstractive QA task using only questions and answers, ignoring the provided passages, and RAG-Sequence outperforms a BART baseline by several BLEU and ROUGE-L points, generating responses that are more factual and less hallucinatory despite not having access to gold passages."
+  },
+  {
+    "question": "What does the Jeopardy question generation experiment reveal about RAG compared to BART?",
+    "ground_truth": "On Jeopardy question generation, RAG-Token achieves higher Q-BLEU scores than BART, and human evaluations show that RAG's questions are judged more factual and more specific in a large fraction of cases, demonstrating the benefit of retrieval-augmented generation for knowledge-intensive natural language generation."
+  },
+  {
+    "question": "How do the authors illustrate the interaction between parametric and non-parametric memory in RAG-Token?",
+    "ground_truth": "By analyzing token-wise document posteriors during Jeopardy generation, they show that certain tokens, such as book titles, are strongly supported by specific retrieved documents, but once partially generated, the posterior flattens, indicating the generator can complete the titles from its parametric memory, with retrieval mainly guiding which knowledge to activate."
+  },
+  {
+    "question": "How is RAG applied to the FEVER fact verification task and how does it perform?",
+    "ground_truth": "The authors map FEVER labels, such as supports, refutes, and not enough info, to single-token targets and train RAG as a sequence classifier without any supervision on evidence retrieval; it achieves label accuracy close to state-of-the-art pipeline models that use gold evidence and retrieves gold evidence articles for a large majority of claims."
+  },
+  {
+    "question": "What do the retrieval ablations show about learned dense retrieval versus BM25 within RAG?",
+    "ground_truth": "Freezing the retriever degrades performance, indicating that learning task-specific retrieval helps, and replacing Dense Passage Retrieval with BM25 hurts most tasks, especially open-domain QA, although BM25 can work well for strongly entity-centric tasks like FEVER."
+  },
+  {
+    "question": "How do the authors demonstrate that RAG's knowledge can be updated without retraining?",
+    "ground_truth": "They build two Wikipedia indices from 2016 and 2018 and query a RAG model about world leaders; by swapping indices, the model correctly tracks leaders corresponding to each time period, showing that updating the non-parametric index alone is enough to update many factual predictions."
+  },
+  {
+    "question": "What broader impacts and risks do the authors highlight for RAG-style systems?",
+    "ground_truth": "They note that grounding generation in external corpora like Wikipedia can reduce hallucinations and improve interpretability, but that such corpora contain errors and biases, and that powerful generative systems could still be misused for producing abusive, misleading, or spam content, necessitating safeguards and detection tools."
+  }
+]
