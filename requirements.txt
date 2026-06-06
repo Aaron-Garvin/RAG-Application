@@ -6,6 +6,6 @@ chromadb
 sentence-transformers
 rank-bm25
 pypdf
-ragas>=0.1.0
+ragas==0.1.9
 datasets
 python-dotenv
