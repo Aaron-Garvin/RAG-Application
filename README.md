@@ -1,163 +1,231 @@
-# Production RAG Application: "Ask My Docs"
+# 📚 Ask My Docs — Production RAG System
 
-A production-grade, domain-specific Retrieval-Augmented Generation (RAG) system implementing hybrid retrieval, Reciprocal Rank Fusion (RRF), Cross-Encoder reranking, strict citation enforcement, and a CI/CD-gated evaluation pipeline.
+> A production-grade **Retrieval-Augmented Generation (RAG)** system that lets you ask natural language questions about your own PDF documents and receive accurate, cited answers — powered by hybrid search, intelligent reranking, and Gemini 2.5 Flash.
 
 ---
 
-## 🏗️ System Architecture
+## ✨ What Does This Do?
 
-The pipeline uses a multi-stage retrieval and synthesis strategy to ensure highly accurate, grounded answers:
+You drop in a PDF. You ask a question. You get a grounded answer with source citations — no hallucinations, no guessing.
+
+Under the hood, it runs a multi-stage pipeline:
+
+1. Searches your document using **two strategies simultaneously** (semantic meaning + keyword matching)
+2. **Merges and reranks** results to surface the most relevant passages
+3. Feeds the best context to **Gemini 2.5 Flash**, which is strictly instructed to only answer from what it found — and to cite every sentence
+
+---
+
+## 🗺️ How the Pipeline Works
 
 ```
-                  ┌───────────────┐
-                  │  User Query   │
-                  └───────┬───────┘
-                          │
-            ┌─────────────┴─────────────┐
-            ▼                           ▼
- ┌─────────────────────┐     ┌─────────────────────┐
- │ Dense Vector Search │     │ Sparse Lexical      │
- │ (ChromaDB +         │     │ (BM25 Retriever)    │
- │  all-MiniLM-L6-v2)  │     │                     │
- └──────────┬──────────┘     └──────────┬──────────┘
-  [Top 10]  │                           │  [Top 20]
-            └─────────────┬─────────────┘
-                          ▼
-             ┌─────────────────────────┐
-             │ Reciprocal Rank Fusion  │
-             │      (RRF Merge)        │
-             └────────────┬────────────┘
-               [Top 10]   │
-                          ▼
-             ┌─────────────────────────┐
-             │ Cross-Encoder Reranker  │
-             │ (ms-marco-MiniLM-L-6-v2)│
-             └────────────┬────────────┘
-                [Top 5]   │
-                          ▼
-             ┌─────────────────────────┐
-             │   Gemini-2.5-Flash      │
-             │   (Strict Citations)    │
-             └────────────┬────────────┘
-                          ▼
-             ┌─────────────────────────┐
-             │ Grounded Response +     │
-             │ Source Attribution      │
-             └─────────────────────────┘
+Your Question
+      │
+      ├──────────────────────────────────┐
+      ▼                                  ▼
+Dense Vector Search              Sparse BM25 Search
+(semantic similarity)            (keyword matching)
+   Top 10 results                   Top 20 results
+      │                                  │
+      └──────────────┬───────────────────┘
+                     ▼
+         Reciprocal Rank Fusion (RRF)
+         Merges both result lists smartly
+                  Top 10
+                     │
+                     ▼
+         Cross-Encoder Reranker
+         Scores each chunk against your query
+                  Top 5
+                     │
+                     ▼
+         Gemini 2.5 Flash
+         Answers only from context, cites sources
+                     │
+                     ▼
+         ✅ Grounded Answer + Source Citations
 ```
 
-### Key Stages
-1. **Document Ingestion**: PDF files are loaded using `PyPDFLoader`, split into semantic chunks (size 500, overlap 50) using `RecursiveCharacterTextSplitter`.
-2. **Hybrid Indexing**: Chunks are indexed in two ways:
-   - **Dense**: Chroma vector store using local Hugging Face `all-MiniLM-L6-v2` embeddings.
-   - **Sparse**: Lexical `BM25` index.
-3. **Retrieval Merging (RRF)**: Reciprocal Rank Fusion merges results from both indices, resolving the trade-off between semantic search and keyword matches.
-4. **Cross-Encoder Reranking**: Re-evaluates top 10 candidates with `ms-marco-MiniLM-L-6-v2` to select the top 5 context chunks, optimizing context relevancy.
-5. **Grounded Synthesis**: Prompts Gemini-2.5-Flash using strict constraints: answer only using context, cite source/page for every sentence, and decline to answer if context is insufficient.
+**Why hybrid search?** Pure semantic search misses exact keywords. Pure keyword search misses paraphrased meaning. Together, they cover both — and RRF merges them without needing manual weight tuning.
 
 ---
 
-## 🚦 CI/CD Evaluation & Regression Gate
+## ⚡ Quick Start (5 Steps)
 
-The project contains a built-in evaluation framework using **Ragas** and **Hugging Face Datasets** to verify output quality:
-- **Faithfulness (Groundedness)**: Assesses whether the generated answer is strictly derived from the retrieved contexts (detects hallucinations).
-- **Answer Relevancy**: Evaluates how well the generated response matches the user's initial question.
-- **Regression Gate**: Comparing new scores against `eval/baseline.json`. If faithfulness or relevancy scores drop by more than **5%** (defined in `check_regression.py`), the CI/CD build fails.
+### Prerequisites
 
----
-
-## 🚀 Getting Started
-
-### 📋 Prerequisites
-- Python 3.10 or 3.11
-- A Gemini API Key (obtain from Google AI Studio)
-
-### 🔧 Installation
-1. Clone the repository and navigate to the root directory:
-   ```bash
-   git clone <your-repo-url>
-   cd rag-portfolio
-   ```
-
-2. Create a virtual environment and activate it:
-   ```bash
-   python -m venv .venv
-   # On Windows (PowerShell/CMD):
-   .venv\Scripts\activate
-   # On macOS/Linux:
-   source .venv/bin/activate
-   ```
-
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Configure your API key:
-   Copy `.env.example` to `.env` and fill in your Gemini API key:
-   ```env
-   GOOGLE_API_KEY=AIzaSy...
-   ```
+- Python **3.10 or 3.11**
+- A free **Gemini API key** from [Google AI Studio](https://aistudio.google.com/)
 
 ---
 
-## 💻 Running the Application
+### Step 1 — Clone & Set Up Environment
 
-### 1. Ingest Documents
-Place your PDFs into the `data/` directory (e.g., the default `data/rag_paper.pdf`) and run ingestion to build search indices:
+```bash
+git clone <your-repo-url>
+cd rag-portfolio
+
+python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows (PowerShell)
+.venv\Scripts\activate
+```
+
+### Step 2 — Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Step 3 — Add Your API Key
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and add your key:
+
+```env
+GOOGLE_API_KEY=AIzaSy...your-key-here...
+```
+
+### Step 4 — Add Your PDF and Ingest It
+
+Drop your PDF into the `data/` folder (a sample `rag_paper.pdf` is included), then run:
+
 ```bash
 python ingest.py
 ```
-This saves the Chroma database to `./chroma_db/` and the BM25 index to `./bm25_index.pkl`.
 
-### 2. Run Diagnostic
-Verify API connectivity to Gemini:
+This builds two search indices saved locally:
+- `./chroma_db/` — vector index for semantic search
+- `./bm25_index.pkl` — keyword index for lexical search
+
+> ⏱️ First run takes a minute — it's downloading the embedding model locally.
+
+### Step 5 — Ask a Question
+
+```bash
+python rag.py "How does RAG-Token differ from RAG-Sequence in marginalization?"
+```
+
+Or run it interactively (no argument needed):
+
+```bash
+python rag.py
+```
+
+---
+
+## 🔍 Verifying Your Setup
+
+Before querying, confirm your Gemini API key is working:
+
 ```bash
 python test_llm.py
 ```
 
-### 3. Query the RAG System
-Run the RAG command-line interface to ask questions about your documents:
-```bash
-python rag.py "How does RAG-Token differ from RAG-Sequence in marginalization?"
-```
-Or run `python rag.py` interactively.
+You should see a successful response from the model. If it fails, double-check your `.env` file.
 
 ---
 
 ## 📊 Running Evaluations
 
-Run evaluations against the golden dataset `eval/golden_qa.json`:
+The system includes a built-in quality evaluation framework using **Ragas**.
+
+### Run the Evaluation Suite
+
 ```bash
 python eval/run_evals.py
 ```
-This runs queries, scores answers using Ragas, and saves scores to `eval/latest_scores.json`.
 
-To check for performance regression:
+This runs a set of pre-defined questions from `eval/golden_qa.json` through the full pipeline, scores the answers, and saves results to `eval/latest_scores.json`.
+
+**What gets measured:**
+
+| Metric | What It Checks |
+|---|---|
+| **Faithfulness** | Is the answer grounded in the retrieved context? (Detects hallucinations) |
+| **Answer Relevancy** | Does the answer actually address the question asked? |
+
+### Check for Regressions
+
 ```bash
 python eval/check_regression.py
 ```
 
+This compares your latest scores against `eval/baseline.json`. If either metric drops by more than **5%**, it exits with an error — which also gates the CI/CD pipeline (see `.github/workflows/eval.yml`).
+
 ---
 
-## 📂 Project Structure
+## 🧪 End-to-End Test Checklist
+
+Use this to verify everything is working after setup:
 
 ```
-├── .github/workflows/
-│   └── eval.yml          # GitHub Actions regression test gate
-├── data/
-│   └── rag_paper.pdf     # Source PDF documents
-├── eval/
-│   ├── baseline.json      # Target metrics baseline
-│   ├── golden_qa.json     # Test dataset (Questions & Ground Truth)
-│   ├── latest_scores.json # Saved scores from last evaluation
-│   ├── run_evals.py       # Ragas evaluation runner
-│   └── check_regression.py# Performance regression verifier
-├── ingest.py             # Document loading, splitting, & indexing
-├── rag.py                # Main RAG querying module (CLI interface)
-├── reranker.py           # Cross-encoder reranking utility
-├── test_llm.py           # Gemini API connectivity test script
-├── requirements.txt      # Python dependencies
-├── .env.example          # Environment variables template
-└── .gitignore            # Git exclusion rules
+[ ] python test_llm.py           → Should print a valid Gemini response
+[ ] python ingest.py             → Should create chroma_db/ and bm25_index.pkl
+[ ] python rag.py "your question" → Should return an answer with citations
+[ ] python eval/run_evals.py     → Should produce eval/latest_scores.json
+[ ] python eval/check_regression.py → Should pass with no errors
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+rag-portfolio/
+│
+├── data/
+│   └── rag_paper.pdf          ← Put your PDFs here
+│
+├── eval/
+│   ├── golden_qa.json         ← Test questions + expected answers
+│   ├── baseline.json          ← Minimum acceptable scores
+│   ├── latest_scores.json     ← Output from last eval run
+│   ├── run_evals.py           ← Runs Ragas evaluation
+│   └── check_regression.py   ← Fails if scores drop > 5%
+│
+├── .github/workflows/
+│   └── eval.yml               ← CI/CD regression gate
+│
+├── ingest.py                  ← Loads PDFs, builds search indices
+├── rag.py                     ← Main query interface (CLI)
+├── reranker.py                ← Cross-encoder reranking logic
+├── test_llm.py                ← Gemini connectivity check
+├── requirements.txt
+├── .env.example               ← Copy to .env and fill in your API key
+└── .gitignore
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+**"No module named X"** — Make sure your virtual environment is activated and you ran `pip install -r requirements.txt`.
+
+**"API key invalid"** — Verify your key is correctly copied in `.env` (no extra spaces or quotes). Run `python test_llm.py` to isolate the issue.
+
+**"No documents found"** — Ensure your PDF is inside the `data/` folder and you've run `python ingest.py` after adding it.
+
+**Slow first ingest** — The `all-MiniLM-L6-v2` embedding model downloads on first run (~90MB). Subsequent runs use the cached version.
+
+**Evaluation scores unexpectedly low** — Try re-ingesting with `python ingest.py` to rebuild fresh indices, then re-run evals.
+
+---
+
+## 🧱 Tech Stack
+
+| Component | Technology |
+|---|---|
+| Vector Store | ChromaDB |
+| Embeddings | `all-MiniLM-L6-v2` (local, via HuggingFace) |
+| Keyword Search | BM25 |
+| Reranker | `ms-marco-MiniLM-L-6-v2` (Cross-Encoder) |
+| LLM | Gemini 2.5 Flash |
+| Evaluation | Ragas + HuggingFace Datasets |
+| CI/CD | GitHub Actions |
