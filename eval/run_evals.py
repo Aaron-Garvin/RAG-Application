@@ -48,7 +48,7 @@ def main():
     golden_path = "eval/golden_qa.json"
     if not os.path.exists(golden_path):
         print(f"[Error] Golden QA dataset not found at {golden_path}")
-        return
+        sys.exit(1)
 
     with open(golden_path) as f:
         pairs = json.load(f)
@@ -72,7 +72,7 @@ def main():
             )
         except Exception as e:
             print(f"  [Error] Failed to process query: {e}")
-            return
+            sys.exit(1)
 
     # 3. Create evaluation dataset for Ragas
     dataset = Dataset.from_list(results)
@@ -82,7 +82,7 @@ def main():
     if not api_key:
         print("[Error] GOOGLE_API_KEY environment variable is missing.")
         print("Please configure it in a '.env' file to run evaluations.")
-        return
+        sys.exit(1)
 
     llm = ChatGoogleGenerativeAI(
         model="gemini-2.5-flash",
@@ -104,7 +104,7 @@ def main():
         )
     except Exception as e:
         print(f"[Error] Ragas evaluation failed: {e}")
-        return
+        sys.exit(1)
 
     print("\n=== RAGAS EVALUATION RESULTS ===")
 
@@ -137,6 +137,7 @@ def main():
         print(f"\nScores successfully saved to '{output_path}'")
     except Exception as e:
         print(f"[Error] Failed to save evaluation scores: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
