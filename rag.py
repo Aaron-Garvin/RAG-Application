@@ -10,7 +10,8 @@ import os
 import pickle
 from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_community.embeddings import HuggingFaceEmbeddings
+# UPDATED IMPORT: use the new module path for HuggingFaceEmbeddings
+from langchain_community.embeddings.huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from reranker import rerank
 
@@ -24,13 +25,13 @@ def get_resources():
     global _vectorstore, _bm25
     if _vectorstore is None or _bm25 is None:
         load_dotenv()
-        
+
         # Check for required database files
         if not os.path.exists("./chroma_db") or not os.path.exists("bm25_index.pkl"):
             raise FileNotFoundError(
                 "Search indices not found! Please run 'python ingest.py' first to build indices."
             )
-            
+
         print("Loading search indices and embedding model...")
         embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
@@ -39,10 +40,10 @@ def get_resources():
             persist_directory="./chroma_db",
             embedding_function=embeddings,
         )
-        
+
         with open("bm25_index.pkl", "rb") as f:
             _bm25 = pickle.load(f)
-            
+
     return _vectorstore, _bm25
 
 
@@ -56,13 +57,13 @@ def rrf_merge(list_a, list_b, k=60):
         key = doc.page_content[:80]
         scores[key] = scores.get(key, 0) + 1 / (k + rank + 1)
         scores[key + "__doc"] = doc
-        
+
     for rank, doc in enumerate(list_b):
         key = doc.page_content[:80]
         scores[key] = scores.get(key, 0) + 1 / (k + rank + 1)
         if key + "__doc" not in scores:
             scores[key + "__doc"] = doc
-            
+
     ranked = sorted(
         [(v, k) for k, v in scores.items() if not k.endswith("__doc")],
         reverse=True,
@@ -77,7 +78,7 @@ def ask_with_sources(question: str) -> dict:
     """
     # 1. Ensure resources are loaded
     vectorstore, bm25 = get_resources()
-    
+
     # 2. Check for LLM API key
     if "GOOGLE_API_KEY" not in os.environ or not os.environ["GOOGLE_API_KEY"]:
         raise ValueError(
@@ -96,10 +97,12 @@ def ask_with_sources(question: str) -> dict:
     reranked = rerank(question, merged, top_n=5)
 
     # 6. Format retrieved context for the prompt
-    context_str = '\n\n'.join([
-        f"[Source: {d.metadata.get('source', 'doc')}, page {d.metadata.get('page', '?')}]\n{d.page_content}"
-        for d in reranked
-    ])
+    context_str = "\n\n".join(
+        [
+            f"[Source: {d.metadata.get('source', 'doc')}, page {d.metadata.get('page', '?')}]\n{d.page_content}"
+            for d in reranked
+        ]
+    )
 
     # 7. Query LLM
     llm = ChatGoogleGenerativeAI(
@@ -122,17 +125,17 @@ Question: {question}
 Answer:"""
 
     response = llm.invoke(prompt)
-    
+
     return {
         "answer": response.content,
         "contexts": [d.page_content for d in reranked],
         "sources": [
             {
                 "source": os.path.basename(d.metadata.get("source", "doc")),
-                "page": d.metadata.get("page", "?")
+                "page": d.metadata.get("page", "?"),
             }
             for d in reranked
-        ]
+        ],
     }
 
 
@@ -146,14 +149,15 @@ def ask(question: str) -> str:
 
 if __name__ == "__main__":
     import sys
+
     load_dotenv()
-    
+
     # Check if a question was passed as arguments
     if len(sys.argv) > 1:
         q = " ".join(sys.argv[1:])
     else:
         q = input("Ask a question: ")
-        
+
     print(f"\nQuestion: {q}")
     try:
         res = ask_with_sources(q)
